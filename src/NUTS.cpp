@@ -5,7 +5,7 @@
 #include <tuple>
 #include <iostream>
 #include <progress_bar.hpp>
-#include "function.h"
+#include "T_normal.h"
 
 #if !defined(WIN32) && !defined(__WIN32) && !defined(__WIN32__)
 #include <Rinterface.h>

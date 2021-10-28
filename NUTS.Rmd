@@ -1,14 +1,31 @@
+---
+title: "NUTS using Rcpp"
+date: "2021-10-28"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: false
+    number_sections: true  ## if you want number sections at each table header
+---
+
+```{r library}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+```
+
 # NUTS
 
 ## The No-U-Turn Sampler
 
 * Hamiltonian Monte Carlo (HMC)는 매우 효과적인 MCMC 알고리즘이지만 hand tuning을 필요로 한다.
-* NUTS는 adaptive extension of HMC로 **hand tuning을 필요로 하지 않는다.**
+* NUTS는 adaptive extension of HMC로 hand tuning의 영향을 줄일 수 있음.
 
 ## HMC
 
 * Hybrid Monte Carlo(HMC)는 DUane et al. 1987, Neal 1993 등에서 제안되었으며 헤밀토니안 역학을 simulating하여 사후분포에서 표본을 추출
-* $ -\log p(\theta|x)$ 를 potential energy로, $r$으ㄹ momentum vector with quadratic kinetic energy $r^T r/2$ 라 한 뒤 
+* $ -\log p(\theta|x)$ 를 potential energy로, $r$로 momentum vector with quadratic kinetic energy $r^T r/2$ 라 한 뒤 
   1. $r$을 다차원 정규분포에서 resampling (gibbs sampling step)
   2. $(\theta, r)$ 에서 L-discretized stemps of the hamiltonian dynamics of the fictitious physical system 을 통해 전진
   3. Accept or reject based on accuracy of simulation (metropolis-hastings algorithm)
@@ -51,3 +68,52 @@ $$\frac{d}{dt} \left[ 0.5 (\theta - \theta^\prime)^T (\theta-\theta^\prime) \rig
 * NUTS performs as well as (or better than) HMC, even ignoring the cost of finding a good simulation length for HMC
 * In conjuction with a method to automatically tune $\epsilon$, NUTS needs no hand-tuning at all.
 * Core inference algorithm in Stan, which aims to be a BUGS, JAGS replacement.
+
+# Example 
+
+## Truncated Normal
+
+$$ (\theta_1, \theta_2) \sim N(0, I) I(\theta_1 > 0) I(\theta_2 > 0)$$
+
+* 변환 $\eta_1 = \log \theta_1,~\eta_2 = \log \theta_2$를 이용 
+
+```{r}
+Rcpp::sourceCpp("src/NUTS.cpp")
+```
+
+* parameter
+```{r}
+theta0 <- c(0, 0)
+n_iter <- as.integer(1e5)
+M_adapt <- as.integer(1e4)
+M_diag0 <- c(1, 1)
+max_treedepth <- 10
+```
+
+* sampling
+```{r, cache=TRUE}
+set.seed(123)
+theta <- NUTS(theta0, n_iter, M_diag0, M_adapt, max_treedepth)
+```
+
+* traceplot
+```{r}
+theta <- theta %>% t() %>% as.data.frame()
+colnames(theta) <- c("theta1", "theta2")
+theta$idx <- 1:n_iter
+# theta <- theta %>% filter(idx > M_adapt)
+
+g1 <- ggplot(data = theta) +
+    geom_line(aes(x = idx, y = theta1))
+g2 <- ggplot(data = theta) +
+    geom_line(aes(x = idx, y = theta2))
+print(grid.arrange(g1, g2))
+```
+
+* transform and visualize
+```{r}
+theta %>%
+    mutate(theta1 = exp(theta1), theta2 = exp(theta2)) %>%
+    ggplot(mapping = aes(x = theta1, y = theta2)) +
+    geom_point()
+```
